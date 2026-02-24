@@ -105,11 +105,11 @@ Right-click → Open → Confirm.
 ## 📈 Why This Project Matters
 
 This project demonstrates capabilities aligned with:
-	•	Business Process Automation
-	•	AI integration in operational workflows
-	•	Systems thinking & architecture
-	•	Enterprise-style job orchestration
-	•	Tooling development for productivity improvement
+- Business Process Automation
+- AI integration in operational workflows
+- Systems thinking & architecture
+- Enterprise-style job orchestration
+- Tooling development for productivity improvement
 
 It reflects the intersection of:
 AI + Automation + Systems + Business Workflow Design
@@ -118,12 +118,12 @@ AI + Automation + Systems + Business Workflow Design
 
 ## 🔮 Future Improvements
 
-  •	Multi-file batch processing
-	•	Structured output formats (JSON / CSV)
-	•	ERP/CRM integration hooks
-	•	API version
-	•	Performance benchmarking layer
-	•	Windows & Linux builds
+- Multi-file batch processing
+- Structured output formats (JSON / CSV)
+- ERP/CRM integration hooks
+- API version
+- Performance benchmarking layer
+- Windows & Linux builds
 
 ---
 
