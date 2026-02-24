@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Build
+dist/
+build/
+
+# Whisper output
+_chunks/
+WhisperOutputs/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
