@@ -1,0 +1,49 @@
+name: Windows Release Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build (PyInstaller)
+        run: |
+          pyinstaller --noconfirm --windowed --name "AI Local Transcription" --add-data "assets;assets" app/gui_app.py
+
+      - name: Zip build output
+        run: |
+          powershell Compress-Archive -Path "dist\AI Local Transcription\*" -DestinationPath "AI-Local-Transcription-Windows.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI-Local-Transcription-Windows
+          path: AI-Local-Transcription-Windows.zip
+
+      - name: Create GitHub Release + upload asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AI-Local-Transcription-Windows.zip
