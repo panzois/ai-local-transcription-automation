@@ -34,7 +34,7 @@ jobs:
 
       - name: Zip build output
         run: |
-          powershell Compress-Archive -Path "dist\AI Local Transcription\*" -DestinationPath "AI-Local-Transcription-Windows.zip"
+              powershell Compress-Archive -Path 'dist\AI Local Transcription\*' -DestinationPath 'AI-Local-Transcription-Windows.zip'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
