@@ -253,7 +253,7 @@ class TranscribeWorker(QThread):
         # Ensure ffmpeg/ffprobe bundled next to exe are usable
         ensure_ffmpeg_on_path()
 
-        # DEBUG (temporary)
+        # DEBUG (temporary) - remove later
         self.log.emit(f"app_base_dir = {app_base_dir()}")
         try:
             self.log.emit(f"ffprobe = {get_tool('ffprobe')}")
@@ -262,86 +262,84 @@ class TranscribeWorker(QThread):
 
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
-            # Output file (single final txt)
-            in_stem = Path(self.input_file).stem
-            out_txt = self.out_dir / f"{in_stem}.txt"
-            if out_txt.exists():
-                # avoid accidentally appending to old runs
-                out_txt.unlink()
+        # Output file (single final txt)
+        in_stem = Path(self.input_file).stem
+        out_txt = self.out_dir / f"{in_stem}.txt"
+        if out_txt.exists():
+            # avoid accidentally appending to old runs
+            out_txt.unlink()
 
-            self.status.emit("Reading duration…")
-            total_sec = self.get_duration_seconds()
+        self.status.emit("Reading duration…")
+        total_sec = self.get_duration_seconds()
 
-            # No chunking
-            if not self.use_chunking:
-                self.overall.emit(0)
-                self.eta.emit("ETA: estimating…")
-                self.status.emit("Transcribing…")
+        # No chunking
+        if not self.use_chunking:
+            self.overall.emit(0)
+            self.eta.emit("ETA: estimating…")
+            self.status.emit("Transcribing…")
 
-                if self.is_cancelled():
-                    raise KeyboardInterrupt("Cancelled")
+            if self.is_cancelled():
+                raise KeyboardInterrupt("Cancelled")
 
-                text = whisper_transcribe_to_text(self.input_file, self.model, language="el")
-                out_txt.write_text(text + "\n", encoding="utf-8")
-
-                self.overall.emit(100)
-                self.eta.emit("ETA: 00:00")
-                self.done.emit(str(self.out_dir))
-                return
-
-            # Chunking path
-            chunk_sec = self.chunk_seconds
-            planned = max(1, math.ceil(total_sec / chunk_sec))
-            self.log.emit(f"Splitting into ~{chunk_sec//60} min chunks (~{planned} chunks)…")
-
-            chunks_dir = self.out_dir / "_chunks"
-            self.split_to_chunks(chunks_dir)
-
-            chunks = sorted(chunks_dir.glob("chunk_*.mp3"))
-            total_chunks = max(1, len(chunks))
-
-            start_all = time.time()
-
-            for i, chunk in enumerate(chunks, start=1):
-                if self.is_cancelled():
-                    raise KeyboardInterrupt("Cancelled")
-
-                chunk_start = time.time()
-                audio_done_before = (i - 1) * chunk_sec
-                audio_this_chunk = min(chunk_sec, max(0.0, total_sec - audio_done_before))
-
-                self.status.emit(f"Processing chunk {i}/{total_chunks}")
-                self.log.emit(f"Processing chunk {i}/{total_chunks} • {chunk.name}")
-
-                overall_at_start = int((audio_done_before / max(1e-6, total_sec)) * 100)
-                self.overall.emit(overall_at_start)
-                self.eta.emit("ETA: estimating…")
-
-                # Transcribe via python API
-                text = whisper_transcribe_to_text(str(chunk), self.model, language="el")
-                with out_txt.open("a", encoding="utf-8") as f:
-                    if text:
-                        f.write(text.strip() + "\n")
-
-                # after chunk progress
-                processed_audio = min(total_sec, i * chunk_sec)
-                overall_frac = processed_audio / max(1e-6, total_sec)
-                self.overall.emit(int(overall_frac * 100))
-
-                elapsed = max(1e-6, time.time() - start_all)
-                speed = processed_audio / elapsed
-                remaining = max(0.0, total_sec - processed_audio)
-                eta_sec = remaining / max(1e-6, speed)
-                self.eta.emit(self.fmt_eta(eta_sec))
+            text = whisper_transcribe_to_text(self.input_file, self.model, language="el")
+            out_txt.write_text(text + "\n", encoding="utf-8")
 
             self.overall.emit(100)
             self.eta.emit("ETA: 00:00")
             self.done.emit(str(self.out_dir))
+            return
 
-        except KeyboardInterrupt:
-            self.cancelled.emit()
-        except Exception as e:
-            self.error.emit(str(e))
+        # Chunking path
+        chunk_sec = self.chunk_seconds
+        planned = max(1, math.ceil(total_sec / chunk_sec))
+        self.log.emit(f"Splitting into ~{chunk_sec//60} min chunks (~{planned} chunks)…")
+
+        chunks_dir = self.out_dir / "_chunks"
+        self.split_to_chunks(chunks_dir)
+
+        chunks = sorted(chunks_dir.glob("chunk_*.mp3"))
+        total_chunks = max(1, len(chunks))
+
+        start_all = time.time()
+
+        for i, chunk in enumerate(chunks, start=1):
+            if self.is_cancelled():
+                raise KeyboardInterrupt("Cancelled")
+
+            audio_done_before = (i - 1) * chunk_sec
+            processed_audio = min(total_sec, i * chunk_sec)
+
+            self.status.emit(f"Processing chunk {i}/{total_chunks}")
+            self.log.emit(f"Processing chunk {i}/{total_chunks} • {chunk.name}")
+
+            overall_at_start = int((audio_done_before / max(1e-6, total_sec)) * 100)
+            self.overall.emit(overall_at_start)
+            self.eta.emit("ETA: estimating…")
+
+            # Transcribe via python API
+            text = whisper_transcribe_to_text(str(chunk), self.model, language="el")
+            with out_txt.open("a", encoding="utf-8") as f:
+                if text:
+                    f.write(text.strip() + "\n")
+
+            # after chunk progress
+            overall_frac = processed_audio / max(1e-6, total_sec)
+            self.overall.emit(int(overall_frac * 100))
+
+            elapsed = max(1e-6, time.time() - start_all)
+            speed = processed_audio / elapsed
+            remaining = max(0.0, total_sec - processed_audio)
+            eta_sec = remaining / max(1e-6, speed)
+            self.eta.emit(self.fmt_eta(eta_sec))
+
+        self.overall.emit(100)
+        self.eta.emit("ETA: 00:00")
+        self.done.emit(str(self.out_dir))
+
+    except KeyboardInterrupt:
+        self.cancelled.emit()
+    except Exception as e:
+        self.error.emit(str(e))
 
 
 # ---------------------------
