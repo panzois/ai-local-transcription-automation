@@ -35,6 +35,7 @@ jobs:
           pyinstaller --noconfirm --clean --windowed --name "AI-Local-Transcription" ^
             --icon ".\assets\panos_whisper_logo_last.ico" ^
             --add-data ".\assets;assets" ^
+            --collect-all whisper ^
             .\app\gui_app.py
 
       - name: Download ffmpeg (Windows)
