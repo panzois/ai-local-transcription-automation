@@ -35,69 +35,71 @@ def app_base_dir() -> Path:
         return Path(sys.executable).resolve().parent
     return Path.cwd()
 
-
 def get_tool(name: str) -> str:
     """
     Find external binaries like ffmpeg/ffprobe.
     Priority:
-      1) PATH
-      2) next to the packaged exe (dist folder)
+      1) next to the packaged exe (dist folder)
+      2) PATH
       3) common local locations (macOS / linux user bin)
     """
-    # 1) PATH
+    base = app_base_dir()
+
+    # 1) Next to exe (Windows release bundling)
+    candidates = []
+
+    if os.name == "nt":
+        # Accept both "ffprobe" and "ffprobe.exe" callers
+        if name.lower().endswith(".exe"):
+            candidates.append(base / name)
+        else:
+            candidates.append(base / f"{name}.exe")
+            candidates.append(base / name)  # just in case
+    else:
+        candidates.append(base / name)
+
+    for c in candidates:
+        if c.exists():
+            return str(c)
+
+    # 2) PATH fallback
     p = shutil.which(name)
     if p:
         return p
-
-    base = app_base_dir()
-
-    # 2) Next to exe (Windows release bundling)
-    # On Windows we expect name.exe
-    candidates = []
-    if os.name == "nt":
-        candidates.append(str(base / f"{name}.exe"))
-    candidates.append(str(base / name))
+    if os.name == "nt" and not name.lower().endswith(".exe"):
+        p = shutil.which(f"{name}.exe")
+        if p:
+            return p
 
     # 3) Common macOS locations
-    candidates += [
-        f"/opt/homebrew/bin/{name}",
-        f"/usr/local/bin/{name}",
+    candidates = [
+        Path(f"/opt/homebrew/bin/{name}"),
+        Path(f"/usr/local/bin/{name}"),
+        Path(Path.home() / f".local/bin/{name}"),
     ]
-
-    # 4) user local bin (linux/mac)
-    home = str(Path.home())
-    candidates.append(f"{home}/.local/bin/{name}")
-
     for c in candidates:
-        if Path(c).exists():
-            return c
+        if c.exists():
+            return str(c)
 
     # Friendly error
-    if name in ("ffmpeg", "ffprobe"):
+    if name in ("ffmpeg", "ffprobe", "ffmpeg.exe", "ffprobe.exe"):
         raise FileNotFoundError(
             f"{name} not found.\n\n"
             f"This app requires FFmpeg.\n"
-            f"- On Windows: make sure ffmpeg.exe & ffprobe.exe are next to the app .exe (in the same folder)\n"
+            f"- On Windows: make sure ffmpeg.exe & ffprobe.exe are in the SAME folder as the app .exe\n"
             f"- On macOS: brew install ffmpeg\n"
         )
 
     raise FileNotFoundError(f"{name} not found.")
 
-
 def ensure_ffmpeg_on_path():
-    """
-    If we bundled ffmpeg/ffprobe next to the exe, add that folder to PATH
-    so subprocess calls work even when using just 'ffprobe' or 'ffmpeg'.
-    """
     base = app_base_dir()
     if os.name == "nt":
-        ffmpeg_exe = base / "ffmpeg.exe"
-        ffprobe_exe = base / "ffprobe.exe"
-        if ffmpeg_exe.exists() and ffprobe_exe.exists():
+        # Add base unconditionally when frozen (safe)
+        if getattr(sys, "frozen", False):
             os.environ["PATH"] = str(base) + os.pathsep + os.environ.get("PATH", "")
-            return True
+        return True
     return False
-
 
 def run_capture(cmd):
     p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -247,11 +249,18 @@ class TranscribeWorker(QThread):
         return f"ETA: {m:02d}:{s:02d}"
 
     def run(self):
-        try:
-            # Ensure ffmpeg/ffprobe bundled next to exe are usable
-            ensure_ffmpeg_on_path()
+    try:
+        # Ensure ffmpeg/ffprobe bundled next to exe are usable
+        ensure_ffmpeg_on_path()
 
-            self.out_dir.mkdir(parents=True, exist_ok=True)
+        # DEBUG (temporary)
+        self.log.emit(f"app_base_dir = {app_base_dir()}")
+        try:
+            self.log.emit(f"ffprobe = {get_tool('ffprobe')}")
+        except Exception as e:
+            self.log.emit(f"ffprobe ERROR: {e}")
+
+        self.out_dir.mkdir(parents=True, exist_ok=True)
 
             # Output file (single final txt)
             in_stem = Path(self.input_file).stem
