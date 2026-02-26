@@ -250,27 +250,27 @@ class TranscribeWorker(QThread):
 
     def run(self):
         try:
-        # Ensure ffmpeg/ffprobe bundled next to exe are usable
-        ensure_ffmpeg_on_path()
+            # Ensure ffmpeg/ffprobe bundled next to exe are usable
+            ensure_ffmpeg_on_path()
 
-        # DEBUG (temporary) - remove later
-        self.log.emit(f"app_base_dir = {app_base_dir()}")
+            # DEBUG (temporary) - remove later
+            self.log.emit(f"app_base_dir = {app_base_dir()}")
         try:
             self.log.emit(f"ffprobe = {get_tool('ffprobe')}")
         except Exception as e:
             self.log.emit(f"ffprobe ERROR: {e}")
 
-        self.out_dir.mkdir(parents=True, exist_ok=True)
+            self.out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Output file (single final txt)
-        in_stem = Path(self.input_file).stem
-        out_txt = self.out_dir / f"{in_stem}.txt"
+            # Output file (single final txt)
+            in_stem = Path(self.input_file).stem
+            out_txt = self.out_dir / f"{in_stem}.txt"
         if out_txt.exists():
             # avoid accidentally appending to old runs
             out_txt.unlink()
 
-        self.status.emit("Reading duration…")
-        total_sec = self.get_duration_seconds()
+            self.status.emit("Reading duration…")
+            total_sec = self.get_duration_seconds()
 
         # No chunking
         if not self.use_chunking:
