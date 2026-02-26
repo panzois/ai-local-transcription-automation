@@ -32,7 +32,7 @@ jobs:
       - name: Build (PyInstaller)
         shell: cmd
         run: |
-          pyinstaller --noconfirm --windowed --name "AI-Local-Transcription" ^
+          pyinstaller --noconfirm --clean --windowed --name "AI-Local-Transcription" ^
             --icon ".\assets\panos_whisper_logo_last.ico" ^
             --add-data ".\assets;assets" ^
             .\app\gui_app.py
@@ -72,6 +72,11 @@ jobs:
           if (-not (Test-Path "$dest\ffmpeg.exe"))  { throw "ffmpeg.exe missing in dist folder" }
           if (-not (Test-Path "$dest\ffprobe.exe")) { throw "ffprobe.exe missing in dist folder" }
 
+      - name: Smoke test ffprobe
+        shell: pwsh
+        run: |
+          & "dist\AI-Local-Transcription\ffprobe.exe" -version
+          
       - name: Zip build output
         shell: pwsh
         run: |
