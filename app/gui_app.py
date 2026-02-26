@@ -8,6 +8,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QDesktopServices, QIcon
 
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 def resource_path(relative_path: str) -> str:
     """
     Works for dev + PyInstaller (one-folder or onefile).
