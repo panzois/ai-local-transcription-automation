@@ -30,11 +30,12 @@ jobs:
 
       - name: Build (PyInstaller)
         run: |
-              pyinstaller --noconfirm --windowed --name "AI Local Transcription" --add-data ".\assets;assets" .\app\gui_app.py
+          pyinstaller --noconfirm --windowed --name "AI-Local-Transcription" --add-data ".\assets;assets" .\app\gui_app.py
 
       - name: Zip build output
+        shell: pwsh
         run: |
-              powershell Compress-Archive -Path 'dist\AI Local Transcription\*' -DestinationPath 'AI-Local-Transcription-Windows.zip' -Force
+          Compress-Archive -Path "dist/AI-Local-Transcription/*" -DestinationPath "AI-Local-Transcription-Windows.zip" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
