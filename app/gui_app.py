@@ -249,7 +249,7 @@ class TranscribeWorker(QThread):
         return f"ETA: {m:02d}:{s:02d}"
 
     def run(self):
-    try:
+        try:
         # Ensure ffmpeg/ffprobe bundled next to exe are usable
         ensure_ffmpeg_on_path()
 
