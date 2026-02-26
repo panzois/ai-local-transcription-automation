@@ -354,7 +354,7 @@ class MainWindow(QWidget):
             icon_file = "assets/panos_whisper_logo_last.ico"
 
         self.setWindowIcon(QIcon(resource_path(icon_file)))
-        self.setWindowTitle("Panos Whisper (Local)")
+        self.setWindowTitle("Panos AI Transcriber")
         self.resize(900, 520)
 
         self.settings = QSettings("Panos", "Panos Whisper")
