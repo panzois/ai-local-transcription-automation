@@ -1,18 +1,88 @@
+# =========================
 # Python
+# =========================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
 .venv/
+venv/
+env/
+ENV/
+.python-version
 
-# Build
-dist/
+# =========================
+# PyInstaller
+# =========================
 build/
+dist/
+*.spec.bak
+*.manifest
+*.pkg
+*.exe
+*.app
+*.dmg
 
-# Whisper output
+# If you VERSION your .spec file,
+# comment out next line
+# *.spec
+
+# =========================
+# Whisper / Outputs
+# =========================
 _chunks/
 WhisperOutputs/
+*.txt
 
-# macOS
-.DS_Store
-
+# =========================
 # Logs
+# =========================
 *.log
+
+# =========================
+# macOS
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# macOS metadata
+._*
+.Spotlight-V100
+.Trashes
+
+# =========================
+# Windows
+# =========================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =========================
+# VS Code / IDE
+# =========================
+.vscode/
+.idea/
+*.iml
+
+# =========================
+# Jupyter (if ever used)
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Coverage / Testing
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp

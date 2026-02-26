@@ -1,10 +1,10 @@
-import sys, math, subprocess, time, shutil, glob, os
+import sys, math, subprocess, time, shutil, glob, os, tempfile
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal, Qt, QSettings, QTimer, QUrl
 from PySide6.QtWidgets import (
     QApplication, QWidget, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QProgressBar, QTextEdit, QComboBox, QSpinBox, QCheckBox
+    QLabel, QProgressBar, QTextEdit, QComboBox, QSpinBox, QCheckBox, QMessageBox
 )
 from PySide6.QtGui import QDesktopServices, QIcon
 
@@ -33,39 +33,82 @@ def resource_path(relative_path: str) -> str:
 # ---------------------------
 def app_base_dir() -> Path:
     """
-    When frozen (PyInstaller), sys.executable points to the .exe.
+    When frozen (PyInstaller), sys.executable points to the actual binary:
+      - macOS: .../MyApp.app/Contents/MacOS/MyApp
+      - Windows: .../MyApp/MyApp.exe
     Otherwise, use current working directory.
     """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path.cwd()
 
+def _bundled_paths_for_tool(name: str) -> list[Path]:
+    """
+    Return possible absolute paths for a bundled tool (ffmpeg/ffprobe).
+    Covers:
+      - macOS: .app/Contents/Resources + .app/Contents/MacOS + _MEIPASS
+      - Windows: next to exe + _MEIPASS (+ .exe variants)
+    """
+    paths: list[Path] = []
+
+    frozen = getattr(sys, "frozen", False)
+    exe_dir = Path(sys.executable).resolve().parent if frozen else Path.cwd()
+
+    # macOS app bundle
+    if frozen and sys.platform == "darwin":
+        contents_dir = exe_dir.parent  # .../Contents
+        res_dir = contents_dir / "Resources"
+        macos_dir = contents_dir / "MacOS"
+
+        paths.append(res_dir / name)
+        paths.append(macos_dir / name)
+
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            paths.append(Path(meipass) / name)
+
+    # Windows / others: next to exe
+    if os.name == "nt":
+        if name.lower().endswith(".exe"):
+            paths.append(exe_dir / name)
+        else:
+            paths.append(exe_dir / f"{name}.exe")
+            paths.append(exe_dir / name)
+
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            if name.lower().endswith(".exe"):
+                paths.append(Path(meipass) / name)
+            else:
+                paths.append(Path(meipass) / f"{name}.exe")
+                paths.append(Path(meipass) / name)
+    else:
+        # linux/dev: next to cwd/exe_dir if you ever bundle there
+        paths.append(exe_dir / name)
+
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            paths.append(Path(meipass) / name)
+
+    return paths
+
 def get_tool(name: str) -> str:
     """
     Find external binaries like ffmpeg/ffprobe.
+
     Priority:
-      1) next to the packaged exe (dist folder)
+      0) bundled inside the app (.app Resources/MacOS or _MEIPASS)
+      1) next to packaged exe (Windows)
       2) PATH
-      3) common local locations (macOS / linux user bin)
+      3) common local locations (macOS)
     """
-    base = app_base_dir()
-
-    # 1) Next to exe (Windows release bundling)
-    candidates = []
-
-    if os.name == "nt":
-        # Accept both "ffprobe" and "ffprobe.exe" callers
-        if name.lower().endswith(".exe"):
-            candidates.append(base / name)
-        else:
-            candidates.append(base / f"{name}.exe")
-            candidates.append(base / name)  # just in case
-    else:
-        candidates.append(base / name)
-
-    for c in candidates:
-        if c.exists():
-            return str(c)
+    # 0) bundled paths
+    for p in _bundled_paths_for_tool(name):
+        try:
+            if p.exists() and p.is_file():
+                return str(p)
+        except:
+            pass
 
     # 2) PATH fallback
     p = shutil.which(name)
@@ -77,33 +120,54 @@ def get_tool(name: str) -> str:
             return p
 
     # 3) Common macOS locations
-    candidates = [
-        Path(f"/opt/homebrew/bin/{name}"),
-        Path(f"/usr/local/bin/{name}"),
-        Path(Path.home() / f".local/bin/{name}"),
-    ]
-    for c in candidates:
-        if c.exists():
-            return str(c)
+    if sys.platform == "darwin":
+        for c in [
+            Path(f"/opt/homebrew/bin/{name}"),
+            Path(f"/usr/local/bin/{name}"),
+            Path(Path.home() / f".local/bin/{name}"),
+        ]:
+            if c.exists():
+                return str(c)
 
     # Friendly error
     if name in ("ffmpeg", "ffprobe", "ffmpeg.exe", "ffprobe.exe"):
         raise FileNotFoundError(
             f"{name} not found.\n\n"
             f"This app requires FFmpeg.\n"
-            f"- On Windows: make sure ffmpeg.exe & ffprobe.exe are in the SAME folder as the app .exe\n"
-            f"- On macOS: brew install ffmpeg\n"
+            f"- Windows: put ffmpeg.exe & ffprobe.exe in the SAME folder as the app .exe\n"
+            f"- macOS: bundle ffmpeg & ffprobe inside the .app (Contents/Resources or Contents/MacOS)\n"
+            f"        or install via Homebrew: brew install ffmpeg\n"
         )
 
     raise FileNotFoundError(f"{name} not found.")
 
-def ensure_ffmpeg_on_path():
-    base = app_base_dir()
+
+def ensure_ffmpeg_on_path() -> bool:
+    """
+    Ensure bundled ffmpeg/ffprobe can be discovered.
+    - Windows: add exe folder to PATH
+    - macOS (frozen): add Contents/Resources AND Contents/MacOS to PATH
+    """
+    if not getattr(sys, "frozen", False):
+        return False
+
+    exe_dir = Path(sys.executable).resolve().parent
+
     if os.name == "nt":
-        # Add base unconditionally when frozen (safe)
-        if getattr(sys, "frozen", False):
-            os.environ["PATH"] = str(base) + os.pathsep + os.environ.get("PATH", "")
+        os.environ["PATH"] = str(exe_dir) + os.pathsep + os.environ.get("PATH", "")
         return True
+
+    if sys.platform == "darwin":
+        contents_dir = exe_dir.parent
+        res_dir = contents_dir / "Resources"
+        macos_dir = contents_dir / "MacOS"
+        os.environ["PATH"] = (
+            str(res_dir) + os.pathsep +
+            str(macos_dir) + os.pathsep +
+            os.environ.get("PATH", "")
+        )
+        return True
+
     return False
 
 def run_capture(cmd):
@@ -620,8 +684,80 @@ class MainWindow(QWidget):
         self.settings.setValue("chunk_min", int(self.spin_chunk.value()))
         self.settings.setValue("out_dir", self.out_dir_path)
 
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+
+    # Windows
+    if os.name == "nt":
+        try:
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
+            if not handle:
+                return False
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return True
+        except:
+            return False
+
+    # macOS / Linux
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+def single_instance_guard(app_name: str = "Panos AI Transcriber") -> bool:
+    try:
+        if sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support" / app_name
+        elif os.name == "nt":
+            base = Path(os.environ.get("APPDATA", str(Path.home()))) / app_name
+        else:
+            base = Path(tempfile.gettempdir()) / app_name
+
+        base.mkdir(parents=True, exist_ok=True)
+        lock_path = base / "app.lock"
+
+        # If lock exists, check if PID is alive; if not, remove stale lock
+        if lock_path.exists():
+            try:
+                old_pid = int(lock_path.read_text(encoding="utf-8").strip() or "0")
+            except:
+                old_pid = 0
+
+            if not _pid_is_running(old_pid):
+                try:
+                    lock_path.unlink()
+                except:
+                    pass
+
+        # Create lock exclusively
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode("utf-8"))
+        os.close(fd)
+
+        import atexit
+        def _cleanup():
+            try:
+                lock_path.unlink(missing_ok=True)
+            except:
+                pass
+        atexit.register(_cleanup)
+
+        return True
+
+    except FileExistsError:
+        return False
 
 if __name__ == "__main__":
+    if not single_instance_guard():
+        # no QApplication yet, so make a minimal one just to show message
+        app = QApplication(sys.argv)
+        QMessageBox.information(None, "Already running", "Panos AI Transcriber is already running.")
+        sys.exit(0)
+
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
