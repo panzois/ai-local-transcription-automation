@@ -9,9 +9,19 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QDesktopServices, QIcon
 
 def resource_path(relative_path: str) -> str:
-    """Works in dev + PyInstaller."""
-    base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
-    return os.path.join(base_path, relative_path)
+    """
+    Works for dev + PyInstaller (one-folder or onefile).
+    In one-folder: use the exe folder.
+    In onefile: use _MEIPASS.
+    """
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).resolve().parent
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            base = Path(meipass)
+    else:
+        base = Path(__file__).resolve().parent.parent  # points to project root
+    return str(base / relative_path)
     
 # ---------------------------
 # Packaged-path helpers
