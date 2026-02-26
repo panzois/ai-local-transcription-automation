@@ -6,9 +6,13 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QProgressBar, QTextEdit, QComboBox, QSpinBox, QCheckBox
 )
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QIcon
 
-
+def resource_path(relative_path: str) -> str:
+    """Works in dev + PyInstaller."""
+    base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    return os.path.join(base_path, relative_path)
+    
 # ---------------------------
 # Packaged-path helpers
 # ---------------------------
@@ -327,6 +331,14 @@ class TranscribeWorker(QThread):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        import platform
+
+        if platform.system() == "Darwin":
+            icon_file = "assets/panos_whisper_logo_last.png"
+        else:
+            icon_file = "assets/panos_whisper_logo_last.ico"
+
+        self.setWindowIcon(QIcon(resource_path(icon_file)))
         self.setWindowTitle("Panos Whisper (Local)")
         self.resize(900, 520)
 
