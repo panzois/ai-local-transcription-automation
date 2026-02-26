@@ -29,6 +29,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build (PyInstaller)
+        shell: cmd
         run: |
           pyinstaller --noconfirm --windowed --name "AI-Local-Transcription" ^
             --icon ".\assets\panos_whisper_logo_last.ico" ^
