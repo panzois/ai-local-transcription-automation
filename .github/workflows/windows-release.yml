@@ -23,6 +23,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -39,18 +40,42 @@ jobs:
       - name: Download ffmpeg (Windows)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
           $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
           Invoke-WebRequest -Uri $url -OutFile "ffmpeg.zip"
+
           Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_extracted" -Force
 
-          $ffdir = Get-ChildItem -Path "ffmpeg_extracted" -Directory | Select-Object -First 1
-          Copy-Item "$($ffdir.FullName)\bin\ffmpeg.exe" "dist\AI-Local-Transcription\" -Force
-          Copy-Item "$($ffdir.FullName)\bin\ffprobe.exe" "dist\AI-Local-Transcription\" -Force
+          # Find extracted folder that contains bin\ffmpeg.exe
+          $ffdir = Get-ChildItem -Path "ffmpeg_extracted" -Directory |
+            Where-Object { Test-Path "$($_.FullName)\bin\ffmpeg.exe" } |
+            Select-Object -First 1
+
+          if (-not $ffdir) {
+            throw "Could not locate ffmpeg bin folder in extracted archive."
+          }
+
+          $dest = "dist\AI-Local-Transcription"
+          if (-not (Test-Path $dest)) { throw "Expected dist folder not found: $dest" }
+
+          Copy-Item "$($ffdir.FullName)\bin\ffmpeg.exe"  "$dest\" -Force
+          Copy-Item "$($ffdir.FullName)\bin\ffprobe.exe" "$dest\" -Force
+
+      - name: Verify dist contents
+        shell: pwsh
+        run: |
+          $dest = "dist\AI-Local-Transcription"
+          Write-Host "Listing $dest"
+          Get-ChildItem $dest | Select-Object Name, Length
+
+          if (-not (Test-Path "$dest\ffmpeg.exe"))  { throw "ffmpeg.exe missing in dist folder" }
+          if (-not (Test-Path "$dest\ffprobe.exe")) { throw "ffprobe.exe missing in dist folder" }
 
       - name: Zip build output
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/AI-Local-Transcription/*" -DestinationPath "AI-Local-Transcription-Windows.zip" -Force
+          Compress-Archive -Path "dist\AI-Local-Transcription\*" -DestinationPath "AI-Local-Transcription-Windows.zip" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
