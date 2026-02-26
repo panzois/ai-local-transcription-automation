@@ -1,12 +1,13 @@
-import sys, math, subprocess, time, shutil, glob, os, tempfile
+import sys, math, subprocess, time, shutil, os, tempfile
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal, Qt, QSettings, QTimer, QUrl
 from PySide6.QtWidgets import (
     QApplication, QWidget, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QProgressBar, QTextEdit, QComboBox, QSpinBox, QCheckBox, QMessageBox
+    QLabel, QProgressBar, QTextEdit, QComboBox, QSpinBox, QCheckBox
 )
 from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w", encoding="utf-8")
@@ -404,6 +405,7 @@ class TranscribeWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+
 # ---------------------------
 # UI
 # ---------------------------
@@ -684,81 +686,56 @@ class MainWindow(QWidget):
         self.settings.setValue("chunk_min", int(self.spin_chunk.value()))
         self.settings.setValue("out_dir", self.out_dir_path)
 
-def _pid_is_running(pid: int) -> bool:
-    if pid <= 0:
-        return False
+def ensure_single_instance(server_name: str):
+    sock = QLocalSocket()
+    sock.connectToServer(server_name)
 
-    # Windows
-    if os.name == "nt":
-        try:
-            import ctypes
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
-            if not handle:
-                return False
-            ctypes.windll.kernel32.CloseHandle(handle)
-            return True
-        except:
-            return False
+    if sock.waitForConnected(150):
+        sock.write(b"activate")
+        sock.flush()
+        sock.waitForBytesWritten(150)
+        sock.disconnectFromServer()
+        sock.close()
+        return False, None
 
-    # macOS / Linux
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
+    server = QLocalServer()
+    if not server.listen(server_name):
+        QLocalServer.removeServer(server_name)
+        if not server.listen(server_name):
+            return False, None
 
-def single_instance_guard(app_name: str = "Panos AI Transcriber") -> bool:
-    try:
-        if sys.platform == "darwin":
-            base = Path.home() / "Library" / "Application Support" / app_name
-        elif os.name == "nt":
-            base = Path(os.environ.get("APPDATA", str(Path.home()))) / app_name
-        else:
-            base = Path(tempfile.gettempdir()) / app_name
+    return True, server
 
-        base.mkdir(parents=True, exist_ok=True)
-        lock_path = base / "app.lock"
-
-        # If lock exists, check if PID is alive; if not, remove stale lock
-        if lock_path.exists():
-            try:
-                old_pid = int(lock_path.read_text(encoding="utf-8").strip() or "0")
-            except:
-                old_pid = 0
-
-            if not _pid_is_running(old_pid):
-                try:
-                    lock_path.unlink()
-                except:
-                    pass
-
-        # Create lock exclusively
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(fd, str(os.getpid()).encode("utf-8"))
-        os.close(fd)
-
-        import atexit
-        def _cleanup():
-            try:
-                lock_path.unlink(missing_ok=True)
-            except:
-                pass
-        atexit.register(_cleanup)
-
-        return True
-
-    except FileExistsError:
-        return False
 
 if __name__ == "__main__":
-    if not single_instance_guard():
-        # no QApplication yet, so make a minimal one just to show message
-        app = QApplication(sys.argv)
-        QMessageBox.information(None, "Already running", "Panos AI Transcriber is already running.")
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(True)
+
+    SERVER_NAME = (
+        f"com.panos.ai-transcriber.instance.{os.getuid()}"
+        if hasattr(os, "getuid")
+        else "com.panos.ai-transcriber.instance"
+    )
+
+    is_primary, server = ensure_single_instance(SERVER_NAME)
+    if not is_primary:
         sys.exit(0)
 
-    app = QApplication(sys.argv)
+    app._single_instance_server = server
+
     w = MainWindow()
     w.show()
+
+    def on_new_connection():
+        s = server.nextPendingConnection()
+        if s:
+            s.readAll()
+            s.disconnectFromServer()
+
+        w.show()
+        w.raise_()
+        w.activateWindow()
+
+    server.newConnection.connect(on_new_connection)
+
     sys.exit(app.exec())
