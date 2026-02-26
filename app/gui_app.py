@@ -1,4 +1,4 @@
-import sys, math, subprocess, time, shutil, glob
+import sys, math, subprocess, time, shutil, glob, os
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal, Qt, QSettings, QTimer, QUrl
@@ -10,38 +10,79 @@ from PySide6.QtGui import QDesktopServices
 
 
 # ---------------------------
-# Binaries helpers
+# Packaged-path helpers
 # ---------------------------
-def get_bin(name: str) -> str:
+def app_base_dir() -> Path:
+    """
+    When frozen (PyInstaller), sys.executable points to the .exe.
+    Otherwise, use current working directory.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path.cwd()
+
+
+def get_tool(name: str) -> str:
+    """
+    Find external binaries like ffmpeg/ffprobe.
+    Priority:
+      1) PATH
+      2) next to the packaged exe (dist folder)
+      3) common local locations (macOS / linux user bin)
+    """
     # 1) PATH
     p = shutil.which(name)
     if p:
         return p
 
-    home = str(Path.home())
+    base = app_base_dir()
 
-    # 2) Common macOS locations
-    candidates = [
+    # 2) Next to exe (Windows release bundling)
+    # On Windows we expect name.exe
+    candidates = []
+    if os.name == "nt":
+        candidates.append(str(base / f"{name}.exe"))
+    candidates.append(str(base / name))
+
+    # 3) Common macOS locations
+    candidates += [
         f"/opt/homebrew/bin/{name}",
         f"/usr/local/bin/{name}",
     ]
 
-    # 3) Whisper often installed here: ~/Library/Python/X.Y/bin/whisper
-    for d in glob.glob(f"{home}/Library/Python/*/bin/{name}"):
-        candidates.append(d)
-
-    # 4) Also try current user's python scripts (some setups)
+    # 4) user local bin (linux/mac)
+    home = str(Path.home())
     candidates.append(f"{home}/.local/bin/{name}")
 
     for c in candidates:
         if Path(c).exists():
             return c
 
-    raise FileNotFoundError(
-        f"{name} not found.\n"
-        f"Install ffmpeg: brew install ffmpeg\n"
-        f"Install whisper: pip3 install --user git+https://github.com/openai/whisper.git"
-    )
+    # Friendly error
+    if name in ("ffmpeg", "ffprobe"):
+        raise FileNotFoundError(
+            f"{name} not found.\n\n"
+            f"This app requires FFmpeg.\n"
+            f"- On Windows: make sure ffmpeg.exe & ffprobe.exe are next to the app .exe (in the same folder)\n"
+            f"- On macOS: brew install ffmpeg\n"
+        )
+
+    raise FileNotFoundError(f"{name} not found.")
+
+
+def ensure_ffmpeg_on_path():
+    """
+    If we bundled ffmpeg/ffprobe next to the exe, add that folder to PATH
+    so subprocess calls work even when using just 'ffprobe' or 'ffmpeg'.
+    """
+    base = app_base_dir()
+    if os.name == "nt":
+        ffmpeg_exe = base / "ffmpeg.exe"
+        ffprobe_exe = base / "ffprobe.exe"
+        if ffmpeg_exe.exists() and ffprobe_exe.exists():
+            os.environ["PATH"] = str(base) + os.pathsep + os.environ.get("PATH", "")
+            return True
+    return False
 
 
 def run_capture(cmd):
@@ -52,7 +93,7 @@ def run_capture(cmd):
 def run_stream(cmd, on_line=None, cancel_check=None):
     """
     Run command with Popen, stream stdout line-by-line.
-    Returns (rc, full_output, process)
+    Returns (rc, full_output, process, last_lines)
     """
     p = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
@@ -64,18 +105,12 @@ def run_stream(cmd, on_line=None, cancel_check=None):
             raw = line.rstrip()
             full.append(line)
 
-            # keep last few lines for debug
             if raw.strip():
                 last_lines.append(raw)
                 last_lines = last_lines[-25:]
 
-            # Filter out tqdm/progressbar junk and empty lines
-            if raw.strip():
-                is_tqdm = ("| " in raw and "/ " in raw) or ("frames/s" in raw) or ("it/s" in raw) or ("0%|" in raw) or ("%|" in raw)
-                is_fp16_warn = ("FP16 is not supported on CPU" in raw)
-                if (not is_tqdm) and (not is_fp16_warn):
-                    if on_line:
-                        on_line(raw)
+            if raw.strip() and on_line:
+                on_line(raw)
 
             if cancel_check and cancel_check():
                 try:
@@ -94,6 +129,20 @@ def run_stream(cmd, on_line=None, cancel_check=None):
 
     rc = p.wait()
     return rc, "".join(full), p, last_lines
+
+
+# ---------------------------
+# Whisper helper (Python API)
+# ---------------------------
+def whisper_transcribe_to_text(audio_path: str, model_name: str, language: str = "el") -> str:
+    """
+    Uses whisper python package directly (no CLI).
+    """
+    import whisper  # lazy import (keeps startup faster)
+
+    model = whisper.load_model(model_name)
+    result = model.transcribe(audio_path, language=language, fp16=False, verbose=False)
+    return (result.get("text") or "").strip()
 
 
 # ---------------------------
@@ -134,7 +183,7 @@ class TranscribeWorker(QThread):
         return self._cancel
 
     def get_duration_seconds(self) -> float:
-        ffprobe = get_bin("ffprobe")
+        ffprobe = get_tool("ffprobe")
         rc, out = run_capture([
             ffprobe, "-v", "error",
             "-show_entries", "format=duration",
@@ -146,7 +195,7 @@ class TranscribeWorker(QThread):
         return float(out.strip())
 
     def split_to_chunks(self, chunks_dir: Path):
-        ffmpeg = get_bin("ffmpeg")
+        ffmpeg = get_tool("ffmpeg")
         chunks_dir.mkdir(parents=True, exist_ok=True)
         out_pattern = str(chunks_dir / "chunk_%03d.mp3")
 
@@ -174,32 +223,6 @@ class TranscribeWorker(QThread):
             msg = "\n".join(last[-10:]) if last else out
             raise RuntimeError(f"ffmpeg failed.\n{msg}")
 
-    def whisper_transcribe_file(self, audio_path: str):
-        whisper = get_bin("whisper")
-        cmd = [
-            whisper, audio_path,
-            "--language", "el",
-            "--model", self.model,
-            "--output_format", "txt",
-            "--output_dir", str(self.out_dir),
-            "--verbose", "False"
-        ]
-
-        self.status.emit("Transcribing…")
-
-        def cancel_check():
-            return self.is_cancelled()
-
-        rc, out, p, last = run_stream(cmd, on_line=None, cancel_check=cancel_check)
-        self._proc = p
-
-        if self.is_cancelled():
-            raise KeyboardInterrupt("Cancelled")
-
-        if rc != 0:
-            msg = "\n".join(last[-10:]) if last else out
-            raise RuntimeError(f"Whisper failed.\n{msg}")
-
     def fmt_eta(self, seconds: float) -> str:
         seconds = int(max(0, seconds))
         h = seconds // 3600
@@ -211,7 +234,17 @@ class TranscribeWorker(QThread):
 
     def run(self):
         try:
+            # Ensure ffmpeg/ffprobe bundled next to exe are usable
+            ensure_ffmpeg_on_path()
+
             self.out_dir.mkdir(parents=True, exist_ok=True)
+
+            # Output file (single final txt)
+            in_stem = Path(self.input_file).stem
+            out_txt = self.out_dir / f"{in_stem}.txt"
+            if out_txt.exists():
+                # avoid accidentally appending to old runs
+                out_txt.unlink()
 
             self.status.emit("Reading duration…")
             total_sec = self.get_duration_seconds()
@@ -220,7 +253,14 @@ class TranscribeWorker(QThread):
             if not self.use_chunking:
                 self.overall.emit(0)
                 self.eta.emit("ETA: estimating…")
-                self.whisper_transcribe_file(self.input_file)
+                self.status.emit("Transcribing…")
+
+                if self.is_cancelled():
+                    raise KeyboardInterrupt("Cancelled")
+
+                text = whisper_transcribe_to_text(self.input_file, self.model, language="el")
+                out_txt.write_text(text + "\n", encoding="utf-8")
+
                 self.overall.emit(100)
                 self.eta.emit("ETA: 00:00")
                 self.done.emit(str(self.out_dir))
@@ -243,7 +283,6 @@ class TranscribeWorker(QThread):
                 if self.is_cancelled():
                     raise KeyboardInterrupt("Cancelled")
 
-                # per-chunk timing
                 chunk_start = time.time()
                 audio_done_before = (i - 1) * chunk_sec
                 audio_this_chunk = min(chunk_sec, max(0.0, total_sec - audio_done_before))
@@ -255,58 +294,13 @@ class TranscribeWorker(QThread):
                 self.overall.emit(overall_at_start)
                 self.eta.emit("ETA: estimating…")
 
-                whisper = get_bin("whisper")
-                cmd = [
-                    whisper, str(chunk),
-                    "--language", "el",
-                    "--model", self.model,
-                    "--output_format", "txt",
-                    "--output_dir", str(self.out_dir),
-                    "--verbose", "False"
-                ]
+                # Transcribe via python API
+                text = whisper_transcribe_to_text(str(chunk), self.model, language="el")
+                with out_txt.open("a", encoding="utf-8") as f:
+                    if text:
+                        f.write(text.strip() + "\n")
 
-                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                self._proc = p
-
-                last_tick = 0.0
-
-                while p.poll() is None:
-                    if self.is_cancelled():
-                        try:
-                            p.terminate()
-                            time.sleep(0.2)
-                            if p.poll() is None:
-                                p.kill()
-                        except:
-                            pass
-                        raise KeyboardInterrupt("Cancelled")
-
-                    now = time.time()
-                    if now - last_tick >= 1.0:
-                        last_tick = now
-
-                        elapsed_all = max(1e-6, now - start_all)
-                        elapsed_chunk = max(0.0, now - chunk_start)
-
-                        # smooth approximate fraction inside chunk
-                        frac_chunk = min(0.99, elapsed_chunk / max(1e-6, (elapsed_chunk + 3.0)))
-
-                        audio_done_est = min(total_sec, audio_done_before + frac_chunk * audio_this_chunk)
-                        overall_frac = audio_done_est / max(1e-6, total_sec)
-                        self.overall.emit(int(overall_frac * 100))
-
-                        speed = audio_done_est / elapsed_all  # audio_sec per real_sec
-                        remaining = max(0.0, total_sec - audio_done_est)
-                        eta_sec = remaining / max(1e-6, speed)
-                        self.eta.emit(self.fmt_eta(eta_sec))
-
-                    time.sleep(0.1)
-
-                rc = p.wait()
-                if rc != 0:
-                    raise RuntimeError("Whisper failed (subprocess exit code != 0).")
-
-                # after chunk
+                # after chunk progress
                 processed_audio = min(total_sec, i * chunk_sec)
                 overall_frac = processed_audio / max(1e-6, total_sec)
                 self.overall.emit(int(overall_frac * 100))
@@ -447,7 +441,7 @@ class MainWindow(QWidget):
         self.spin_chunk.setEnabled(checked)
 
     def _animate_status_dots(self):
-        self._dots_state = (self._dots_state + 1) % 4  # 0..3
+        self._dots_state = (self._dots_state + 1) % 4
         dots = "." * self._dots_state
         self.status_label.setText(f"Status: {self._base_status}{dots}")
 
@@ -545,7 +539,6 @@ class MainWindow(QWidget):
         self.worker.start()
 
     def set_status_text(self, s: str):
-        # base status for animation
         self._base_status = s.replace("…", "").replace("...", "").strip()
         self.status_label.setText(f"Status: {self._base_status}")
 
