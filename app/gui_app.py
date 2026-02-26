@@ -47,7 +47,7 @@ def _bundled_paths_for_tool(name: str) -> list[Path]:
     """
     Return possible absolute paths for a bundled tool (ffmpeg/ffprobe).
     Covers:
-      - macOS: .app/Contents/Resources + .app/Contents/MacOS + _MEIPASS
+      - macOS: .app/Contents/Resources + .app/Contents/MacOS + .app/Contents/Frameworks + _MEIPASS
       - Windows: next to exe + _MEIPASS (+ .exe variants)
     """
     paths: list[Path] = []
@@ -60,9 +60,11 @@ def _bundled_paths_for_tool(name: str) -> list[Path]:
         contents_dir = exe_dir.parent  # .../Contents
         res_dir = contents_dir / "Resources"
         macos_dir = contents_dir / "MacOS"
+        frameworks_dir = contents_dir / "Frameworks"
 
         paths.append(res_dir / name)
         paths.append(macos_dir / name)
+        paths.append(frameworks_dir / name)
 
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:

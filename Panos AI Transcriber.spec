@@ -1,21 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_data_files
 
 datas = [('./assets', 'assets')]
-binaries = []
-hiddenimports = []
-tmp_ret = collect_all('whisper')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('torch')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+datas += collect_data_files('whisper')
 
 
 a = Analysis(
     ['app/gui_app.py'],
     pathex=[],
-    binaries=binaries,
+    binaries=[('/opt/homebrew/Cellar/ffmpeg/8.0.1_4/bin/ffmpeg', '.'), ('/opt/homebrew/Cellar/ffmpeg/8.0.1_4/bin/ffprobe', '.')],
     datas=datas,
-    hiddenimports=hiddenimports,
+    hiddenimports=['whisper'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
