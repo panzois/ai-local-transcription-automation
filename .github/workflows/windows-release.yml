@@ -32,7 +32,8 @@ jobs:
       - name: Build (PyInstaller)
         shell: cmd
         run: |
-          pyinstaller --noconfirm --clean --windowed --name "AI-Local-Transcription" ^
+          pyinstaller --noconfirm --clean --windowed ^
+            --name "Panos-AI-Transcriber" ^
             --icon ".\assets\panos_whisper_logo_last.ico" ^
             --add-data ".\assets;assets" ^
             --collect-all whisper ^
@@ -48,7 +49,6 @@ jobs:
 
           Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_extracted" -Force
 
-          # Find extracted folder that contains bin\ffmpeg.exe
           $ffdir = Get-ChildItem -Path "ffmpeg_extracted" -Directory |
             Where-Object { Test-Path "$($_.FullName)\bin\ffmpeg.exe" } |
             Select-Object -First 1
@@ -57,8 +57,10 @@ jobs:
             throw "Could not locate ffmpeg bin folder in extracted archive."
           }
 
-          $dest = "dist\AI-Local-Transcription"
-          if (-not (Test-Path $dest)) { throw "Expected dist folder not found: $dest" }
+          $dest = "dist\Panos-AI-Transcriber"
+          if (-not (Test-Path $dest)) { 
+            throw "Expected dist folder not found: $dest" 
+          }
 
           Copy-Item "$($ffdir.FullName)\bin\ffmpeg.exe"  "$dest\" -Force
           Copy-Item "$($ffdir.FullName)\bin\ffprobe.exe" "$dest\" -Force
@@ -66,7 +68,7 @@ jobs:
       - name: Verify dist contents
         shell: pwsh
         run: |
-          $dest = "dist\AI-Local-Transcription"
+          $dest = "dist\Panos-AI-Transcriber"
           Write-Host "Listing $dest"
           Get-ChildItem $dest | Select-Object Name, Length
 
@@ -76,21 +78,24 @@ jobs:
       - name: Smoke test ffprobe
         shell: pwsh
         run: |
-          & "dist\AI-Local-Transcription\ffprobe.exe" -version
-          
+          & "dist\Panos-AI-Transcriber\ffprobe.exe" -version
+
       - name: Zip build output
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist\AI-Local-Transcription\*" -DestinationPath "AI-Local-Transcription-Windows.zip" -Force
+          Compress-Archive `
+            -Path "dist\Panos-AI-Transcriber\*" `
+            -DestinationPath "Panos-AI-Transcriber-Windows.zip" `
+            -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AI-Local-Transcription-Windows
-          path: AI-Local-Transcription-Windows.zip
+          name: Panos-AI-Transcriber-Windows
+          path: Panos-AI-Transcriber-Windows.zip
 
       - name: Create GitHub Release + upload asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: AI-Local-Transcription-Windows.zip
+          files: Panos-AI-Transcriber-Windows.zip
