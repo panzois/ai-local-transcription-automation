@@ -32,6 +32,17 @@ jobs:
         run: |
           pyinstaller --noconfirm --windowed --name "AI-Local-Transcription" --add-data ".\assets;assets" .\app\gui_app.py
 
+      - name: Download ffmpeg (Windows)
+        shell: pwsh
+        run: |
+          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Invoke-WebRequest -Uri $url -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_extracted" -Force
+
+          $ffdir = Get-ChildItem -Path "ffmpeg_extracted" -Directory | Select-Object -First 1
+          Copy-Item "$($ffdir.FullName)\bin\ffmpeg.exe" "dist\AI-Local-Transcription\" -Force
+          Copy-Item "$($ffdir.FullName)\bin\ffprobe.exe" "dist\AI-Local-Transcription\" -Force
+
       - name: Zip build output
         shell: pwsh
         run: |
