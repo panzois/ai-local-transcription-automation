@@ -1,129 +1,165 @@
-# AI Local Transcription Automation
+# Panos AI Transcriber
 
-Developed by Panagiotis Zois  
-MSc in Information & Communication Technology  
-Focus: AI Integration • Business Process Automation • Systems Architecture
+AI-powered local transcription system with cross-platform production builds.
 
-AI-powered local transcription system built with Python and OpenAI Whisper.
+**Developed by Panagiotis Zois**  
+*MSc in Information & Communication Technology*  
+**Focus Areas:** AI Integration • Business Process Automation • Systems Architecture • ERP-Oriented Thinking
 
-This project demonstrates how AI models can be integrated into real-world business workflows through automation, process orchestration, and desktop application development.
+---
+
+## Overview
+
+Panos AI Transcriber is a fully local AI transcription desktop application designed to demonstrate how artificial intelligence can be integrated into structured, production-oriented workflows.
+
+The project goes beyond a simple Whisper wrapper.  
+It implements:
+
+- Deterministic build pipelines  
+- Cross-platform distribution  
+- Chunk-based processing orchestration  
+- Long-running job monitoring  
+- Enterprise-style execution control  
+
+**Latest Production Release:** `v1.1.0` (Cross-Platform)  
+Available for **macOS** and **Windows (x64)**.
 
 ---
 
 ## 🎯 Project Purpose
 
-This application was designed as a practical example of:
+This project was designed as a portfolio-grade demonstration of:
 
-- AI model integration in business processes
-- Process automation & orchestration
-- Long-running task monitoring (progress & ETA)
-- Desktop system interface development
-- Production packaging & distribution
+- AI model integration into operational workflows  
+- Process orchestration & job lifecycle management  
+- Desktop system engineering  
+- Reproducible build pipelines  
+- Cross-platform packaging discipline  
 
-Rather than being a simple script wrapper, this project implements a full transcription pipeline with chunking, subprocess handling, cancellation logic, and real-time progress tracking.
+It reflects how AI tools can be embedded inside real business environments rather than used as standalone scripts.
 
 ---
 
-## 🚀 Features
+## 🚀 Core Capabilities
 
-- Local AI speech-to-text (OpenAI Whisper)
-- Automatic audio chunking for large files
-- Real-time progress monitoring
-- ETA estimation logic
-- Cancellation support
-- Desktop GUI (PySide6)
-- macOS standalone build (via Releases)
+- Fully local speech-to-text processing (no cloud dependency)  
+- Automatic audio chunking for large files  
+- Real-time progress monitoring  
+- Estimated time calculation (ETA logic)  
+- Cancellation & lifecycle control  
+- Cross-platform standalone builds (macOS / Windows x64)  
 
 ---
 
 ## 🧠 Architecture Overview
 
-The system is structured into clear layers:
+The system follows a layered architecture:
 
-**GUI Layer**
-- PySide6 desktop interface
-- User interaction & process control
+### 1️⃣ GUI Layer
+- PySide6 desktop interface  
+- User interaction control  
+- Job state visibility  
 
-**Processing Layer**
-- Whisper model invocation via subprocess
-- FFmpeg-based audio segmentation
-- Time-based ETA calculation
-- Progress estimation logic
+### 2️⃣ Processing Layer
+- Whisper Python API integration  
+- FFmpeg-based segmentation  
+- Time-based performance estimation  
+- Controlled execution environment  
 
-**Automation Layer**
-- Chunk orchestration
-- Process lifecycle management
-- Error handling & cancellation control
+### 3️⃣ Orchestration Layer
+- Chunk scheduling  
+- Job lifecycle management  
+- Error handling & safe termination  
+- Deterministic execution flow  
 
-This mirrors real-world enterprise system patterns:
-- Orchestration engines
-- Batch processing
-- Workflow automation
-- Long-running job monitoring
+This structure mirrors real-world enterprise patterns such as:
+
+- Batch processing systems  
+- Orchestration engines  
+- Workflow automation pipelines  
+- Long-running background task monitoring  
+
+---
+
+## ⚙️ Technical Design Decisions
+
+- Whisper invoked via Python API (not CLI subprocess)  
+- CPU-first execution model  
+- Fully local execution (no external API calls)  
+- Bundled `ffmpeg` / `ffprobe` binaries  
+- Deterministic macOS build script  
+- Windows CI-based reproducible build pipeline  
+- Semantic versioning for releases  
+
+---
+
+## 📦 Production Builds
+
+Versioned cross-platform builds are available under **Releases**.
+
+Current stable release:
+
+**Panos AI Transcriber – v1.1.0**
+
+Included assets:
+
+- macOS standalone application  
+- Windows standalone application (x64)  
+
+No Python installation is required for end users.
 
 ---
 
 ## 🛠 Tech Stack
 
-- Python 3.9+
-- PySide6 (Qt GUI framework)
-- OpenAI Whisper
-- FFmpeg
-- PyInstaller (macOS packaging)
+- Python 3.11  
+- PySide6 (Qt GUI framework)  
+- OpenAI Whisper  
+- FFmpeg  
+- PyInstaller  
+- GitHub Actions (Windows CI pipeline)  
 
 ---
 
-## 📦 Installation (Run from Source – macOS)
+## 📊 Performance Notes
 
-```bash
-git clone <repo-url>
-cd ai-local-transcription-automation
+Performance scales with hardware capability.
 
-python3 -m venv .venv
-source .venv/bin/activate
+Tested successfully on:
 
-pip install -r requirements.txt
-brew install ffmpeg
+- Apple Silicon macOS  
+- Legacy Intel i5 (4th Gen) systems (CPU-only execution)  
 
-python app/gui_app.py
-
-```
-
-## 💻 macOS Standalone App
-
-A compiled macOS build is available under the Releases section.
-
-Download the .zip, extract it, and open:
-
-Panos Whisper.app
-
-If macOS blocks the application:
-Right-click → Open → Confirm.
+This demonstrates portability across hardware tiers and predictable scaling behavior.
 
 ---
 
-## 📈 Why This Project Matters
+## 💼 Business & Systems Perspective
 
-This project demonstrates capabilities aligned with:
-- Business Process Automation
-- AI integration in operational workflows
-- Systems thinking & architecture
-- Enterprise-style job orchestration
-- Tooling development for productivity improvement
+This project demonstrates competencies aligned with:
+
+- Business Process Automation  
+- AI-enabled workflow integration  
+- System lifecycle management  
+- Enterprise-style orchestration design  
+- Operational tooling development  
+- Cross-platform deployment discipline  
 
 It reflects the intersection of:
-AI + Automation + Systems + Business Workflow Design
+
+**AI + Systems Engineering + Automation + Business Workflow Design**
 
 ---
 
-## 🔮 Future Improvements
+## 🔮 Roadmap / Future Enhancements
 
-- Multi-file batch processing
-- Structured output formats (JSON / CSV)
-- ERP/CRM integration hooks
-- API version
-- Performance benchmarking layer
-- Windows & Linux builds
+- Multi-file batch processing  
+- Structured output formats (JSON / CSV)  
+- ERP / CRM integration hooks  
+- API-based version  
+- Performance benchmarking module  
+- Model selection options  
+- Linux build pipeline  
 
 ---
 
